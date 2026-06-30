@@ -1,0 +1,137 @@
+---
+name: yoon-hwpx-2
+description: Safe Korean HWPX document workflow for Codex. Use when working with Hangul/HWPX files, preserving original Korean document forms, splitting pages or sections, editing text nodes or table cells, removing hp:linesegarray warnings, validating HWPX ZIP/XML structure, or troubleshooting Hancom damage/security warnings without using local Hancom Office.
+---
+
+# Yoon HWPX 2
+
+Use this skill for `.hwpx` only. Do not create or directly edit legacy binary `.hwp` files.
+
+## Core Rules
+
+- Never modify the original HWPX in place.
+- Treat HWPX as a ZIP/XML package.
+- Preserve the original form: section structure, tables, merged cells, margins, styles, images, and ZIP entry order whenever possible.
+- Prefer changing only `hp:t` text nodes in `Contents/section*.xml`.
+- Remove `hp:linesegarray` after text edits, page splits, or content moves.
+- Do not use `Hwp.exe`, Hancom COM automation, GUI conversion, or local Hancom Office.
+- Do not claim success without validation logs.
+- If the user has a top-level project/result folder rule, create a numbered top-level subfolder and place deliverables plus logs there.
+
+## Bundled Scripts
+
+- `scripts/hwpxskill/`: full workflow tools from `hwpxskill`.
+  - `validate.py`: structural ZIP/XML validation.
+  - `text_extract.py`: text extraction.
+  - `analyze_template.py`: style/table/section analysis.
+  - `hwpx_slots.py`: editable slot extraction.
+  - `edit_hwpx.py`: original-form-preserving text/cell/slot edits.
+  - `finalize_hwpx.py`: strip `hp:linesegarray` and layout-risk checks.
+  - `page_guard.py`: reference-vs-output structure and page-drift guard.
+  - `content_guard.py`: required/forbidden content checks.
+- `scripts/yoon-safe/`: lightweight safe-edit tools from `yoon_hwpx`.
+  - `analyze_hwpx.py`, `extract_text_map.py`, `apply_text_map.py`, `remove_linesegarray.py`, `validate_hwpx.py`.
+- `scripts/extract_page3.py`: section-child extraction utility. Defaults to the culture-center third-page range but accepts `--source-section` and `--children`.
+
+## References
+
+Read these only when needed:
+
+- `references/hwpx-format.md`: OWPML/HWPX XML format details.
+- `references/yoon-02-hwpx-structure.md`: compact HWPX package structure notes.
+- `references/yoon-03-safe-edit-workflow.md`: safe text-node editing workflow.
+- `references/yoon-04-linesegarray-warning.md`: Hancom warning caused by stale `hp:linesegarray`.
+- `references/yoon-06-troubleshooting.md`: common HWPX failure modes.
+
+## Windows Setup
+
+Use the workspace `.venv`; create it if missing. Do not install packages globally.
+
+```powershell
+if (-not (Test-Path -LiteralPath ".\.venv\Scripts\python.exe")) {
+  python -m venv .venv
+}
+.\.venv\Scripts\python.exe -m pip install lxml
+$env:PYTHONUTF8 = "1"
+$env:PYTHONIOENCODING = "utf-8"
+```
+
+## Inspect A Source HWPX
+
+Run both validators when possible.
+
+```powershell
+$py = ".\.venv\Scripts\python.exe"
+$skill = "C:\Users\User\.codex\skills\yoon-hwpx-2"
+$src = "input.hwpx"
+
+& $py "$skill\scripts\hwpxskill\validate.py" $src
+& $py "$skill\scripts\yoon-safe\validate_hwpx.py" $src
+& $py "$skill\scripts\hwpxskill\text_extract.py" $src --format markdown | Out-File ".\source_text.md" -Encoding UTF8
+& $py "$skill\scripts\yoon-safe\extract_text_map.py" $src --output ".\source_text_map.json"
+```
+
+## Split A Page Or Section Range
+
+HWPX does not always store physical pages directly. First inspect sections and top-level child ranges, then extract the range that corresponds to the visible page.
+
+```powershell
+$py = ".\.venv\Scripts\python.exe"
+$skill = "C:\Users\User\.codex\skills\yoon-hwpx-2"
+$src = "source.hwpx"
+
+& $py "$skill\scripts\extract_page3.py" $src --inspect | Out-File ".\structure_inspect.json" -Encoding UTF8
+```
+
+For the culture-center original where page 3 is the lower lecture plan:
+
+```powershell
+& $py "$skill\scripts\extract_page3.py" $src `
+  --mode single-section `
+  --source-section "Contents/section1.xml" `
+  --children "12-23" `
+  --output ".\page3_lower_plan.hwpx" `
+  --report ".\page3_lower_plan_report.json"
+
+& $py "$skill\scripts\yoon-safe\validate_hwpx.py" ".\page3_lower_plan.hwpx" --expect-no-linesegarray |
+  Out-File ".\page3_lower_plan_validate.json" -Encoding UTF8
+```
+
+If Hancom is sensitive to removing section entries, create a fallback:
+
+```powershell
+& $py "$skill\scripts\extract_page3.py" $src `
+  --mode preserve-sections `
+  --source-section "Contents/section1.xml" `
+  --children "12-23" `
+  --output ".\page3_lower_plan_preserve_sections.hwpx" `
+  --report ".\page3_lower_plan_preserve_sections_report.json"
+```
+
+## Edit Existing Text Safely
+
+Use slot or text-map editing before rebuilding a document.
+
+```powershell
+$py = ".\.venv\Scripts\python.exe"
+$skill = "C:\Users\User\.codex\skills\yoon-hwpx-2"
+$src = "source.hwpx"
+
+& $py "$skill\scripts\hwpxskill\hwpx_slots.py" $src --output ".\slots.json"
+# Prepare values.json with keys from slots.json.
+& $py "$skill\scripts\hwpxskill\edit_hwpx.py" $src --output ".\edited.hwpx" --slot-json ".\values.json"
+& $py "$skill\scripts\hwpxskill\finalize_hwpx.py" ".\edited.hwpx" --strip-linesegarray --layout
+& $py "$skill\scripts\yoon-safe\validate_hwpx.py" ".\edited.hwpx" --expect-no-linesegarray
+```
+
+## Validation Checklist
+
+Before final response:
+
+- Confirm output path and file size.
+- Save analysis/report JSON next to the HWPX output.
+- Validate first ZIP entry is `mimetype`.
+- Validate required entries and XML well-formedness.
+- Validate `hp:linesegarray` count is `0` after edits or moved content.
+- Extract output text and confirm only intended content remains or changed.
+- Keep fallback outputs clearly labeled, such as `단일섹션` and `구조유지`.

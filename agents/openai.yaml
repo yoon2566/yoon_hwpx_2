@@ -1,0 +1,4 @@
+interface:
+  display_name: "Yoon HWPX 2"
+  short_description: "Preserve and safely edit HWPX files"
+  default_prompt: "Use $yoon-hwpx-2 to safely split, edit, validate, or repair a Korean HWPX document while preserving the original form."
