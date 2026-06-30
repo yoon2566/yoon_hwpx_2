@@ -28,6 +28,11 @@ much as possible, and only change the intended text or section content.
 
 Always keep the original file unchanged.
 
+For Hancom-facing final files, prefer the raw ZIP-preserving workflow in
+`scripts/hwpxskill/` over generic ZIP rewriting. A file can pass ZIP/XML
+validation but still show a Hancom damage warning if preview caches, local ZIP
+headers, section structure, or layout caches drift in a way Hancom dislikes.
+
 ## Source Of Truth
 
 The actual Codex skill entrypoint is:
@@ -70,9 +75,12 @@ where the visible third page was stored as top-level children `12-23` inside
 3. Validate the source HWPX.
 4. Extract text and inspect section structure.
 5. Modify or split only the intended content.
-6. Remove `hp:linesegarray` after edits or content movement.
-7. Validate the output with both validators when possible.
-8. Save the output HWPX and JSON logs together.
+6. For final Hancom deliverables, use `scripts/hwpxskill/edit_hwpx.py` and
+   `scripts/hwpxskill/finalize_hwpx.py` so unchanged package entries are
+   preserved as much as possible.
+7. Remove `hp:linesegarray` after edits or content movement.
+8. Validate the output with both validators when possible.
+9. Save the output HWPX and JSON logs together.
 
 ## Minimal Commands
 
@@ -123,6 +131,16 @@ For edited or split outputs, validate with:
 ```powershell
 --expect-no-linesegarray
 ```
+
+If `linesegarray` is already `0` but Hancom still reports damage:
+
+- do not keep editing the damaged output
+- rebuild from the original or a `preserve-sections` extraction
+- use `scripts/hwpxskill/edit_hwpx.py` with slots/paragraphs/cells
+- finalize with `scripts/hwpxskill/finalize_hwpx.py --strip-linesegarray`
+- do not rewrite `Preview/PrvText.txt` or `Preview/PrvImage.png` casually
+
+See `references/yoon-07-hancom-damage-recovery.md`.
 
 ## Recommended Trigger Prompt
 
